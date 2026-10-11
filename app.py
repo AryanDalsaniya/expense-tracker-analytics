@@ -1,5 +1,8 @@
 import os
+import threading
+import webbrowser
 from flask import Flask, render_template, request, jsonify, Response
+from flask_cors import CORS
 from config import Config
 from database import init_db
 from services.expense_service import ExpenseService
@@ -8,6 +11,9 @@ from services.analytics_service import AnalyticsService
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Enable CORS for cross-origin development (e.g. Live Server, Vite, port 5500)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
 
     # Initialize database on app startup
     with app.app_context():
@@ -153,10 +159,25 @@ def create_app():
         except ValueError as e:
             return jsonify({"success": False, "error": str(e)}), 400
 
+    @app.route("/api/health", methods=["GET"])
+    def health_check():
+        return jsonify({"success": True, "status": "healthy", "service": "SpendWise API"})
+
     return app
 
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    print("\n" + "="*60)
+    print(f"  🚀 SpendWise Financial Analytics Server")
+    print(f"  📍 Local URL: http://127.0.0.1:{port}")
+    print(f"  📊 API Health: http://127.0.0.1:{port}/api/health")
+    print("="*60 + "\n")
+    
+    # Auto open browser only in main process (not reload thread)
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not Config.DEBUG:
+        threading.Timer(1.2, lambda: webbrowser.open(f"http://127.0.0.1:{port}")).start()
+
+    app.run(host="0.0.0.0", port=port, debug=Config.DEBUG)
 

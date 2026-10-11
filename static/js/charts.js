@@ -20,7 +20,11 @@ const ChartsManager = {
 
         const categories = categoriesData.categories || [];
         if (categories.length === 0) {
-            // Render placeholder or empty state
+            return;
+        }
+
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js CDN unavailable.');
             return;
         }
 
@@ -103,6 +107,11 @@ const ChartsManager = {
             const monthly = dataToRender.monthly || [];
             labels = monthly.map(m => m.label);
             values = monthly.map(m => m.total);
+        }
+
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js CDN unavailable.');
+            return;
         }
 
         // Create gradient fill

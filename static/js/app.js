@@ -24,8 +24,37 @@ const App = {
     // Initialize application on DOM ready
     async init() {
         this.bindEvents();
+        await this.checkBackendConnection();
         await this.loadInitialMetadata();
         await this.refreshAllData();
+    },
+
+    async checkBackendConnection() {
+        const isHealthy = await API.checkHealth();
+        const banner = document.getElementById('connectionBanner');
+        if (banner) {
+            if (isHealthy) {
+                banner.classList.add('hidden');
+            } else {
+                banner.classList.remove('hidden');
+            }
+        }
+        return isHealthy;
+    },
+
+    // Refresh all page metrics, analytics, and table data
+    async refreshAllData() {
+        const isHealthy = await this.checkBackendConnection();
+        if (!isHealthy) {
+            console.warn('Backend server is unreachable. Please ensure python app.py is running.');
+            return;
+        }
+
+        await Promise.allSettled([
+            this.loadKPIs(),
+            this.loadAnalyticsCharts(),
+            this.loadExpenses()
+        ]);
     },
 
     // Bind event listeners
@@ -200,15 +229,6 @@ const App = {
         } catch (err) {
             console.error("Failed to load metadata:", err);
         }
-    },
-
-    // Refresh all page metrics, analytics, and table data
-    async refreshAllData() {
-        await Promise.all([
-            this.loadKPIs(),
-            this.loadAnalyticsCharts(),
-            this.loadExpenses()
-        ]);
     },
 
     // Fetch and render KPI metric cards
