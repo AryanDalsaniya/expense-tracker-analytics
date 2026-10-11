@@ -157,6 +157,18 @@ class SpendWiseTestCase(unittest.TestCase):
         self.assertEqual(res.mimetype, 'text/csv')
         self.assertIn(b'Grocery Mart', res.data)
 
+    def test_08_all_time_period_kpis(self):
+        """All-time period query returns lifetime totals and lifetime highest expense."""
+        res = self.client.get('/api/analytics/summary?mode=demo&period=all')
+        self.assertEqual(res.status_code, 200)
+        data = json.loads(res.data)['data']
+        self.assertEqual(data['total_transactions'], 28)
+        self.assertGreater(data['total_spent'], 0)
+        self.assertIsNotNone(data['highest_expense'])
+        # Highest expense in demo data is Rent / Office Supplies ($750 or similar)
+        self.assertGreaterEqual(data['highest_expense']['amount'], 50.0)
+
 if __name__ == '__main__':
     unittest.main()
+
 

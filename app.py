@@ -134,7 +134,8 @@ def create_app():
         mode = request.args.get("mode", "live")
         month = request.args.get("month", type=int)
         year = request.args.get("year", type=int)
-        kpis = AnalyticsService.get_summary_kpis(mode=mode, month=month, year=year)
+        period = request.args.get("period", "month")
+        kpis = AnalyticsService.get_summary_kpis(mode=mode, month=month, year=year, period_mode=period)
         return jsonify({"success": True, "data": kpis})
 
     @app.route("/api/analytics/categories", methods=["GET"])

@@ -136,13 +136,13 @@ const App = {
         const customYear = document.getElementById('customYearSelect');
         if (customMonth) {
             customMonth.innerHTML = monthNames.map((m, idx) =>
-                `<option value="${idx + 1}" ${idx + 1 === curMonth ? 'selected' : ''}>${m.substring(0, 3)}</option>`
+                `<option value="${idx + 1}" class="bg-slate-900 text-slate-100" ${idx + 1 === curMonth ? 'selected' : ''}>${m.substring(0, 3)}</option>`
             ).join('');
         }
         if (customYear) {
             const years = [curYear - 2, curYear - 1, curYear, curYear + 1];
             customYear.innerHTML = years.map(y =>
-                `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
+                `<option value="${y}" class="bg-slate-900 text-slate-100" ${y === curYear ? 'selected' : ''}>${y}</option>`
             ).join('');
         }
 
@@ -151,13 +151,13 @@ const App = {
         const budgetYear = document.getElementById('budgetYearSelect');
         if (budgetMonth) {
             budgetMonth.innerHTML = monthNames.map((m, idx) =>
-                `<option value="${idx + 1}" ${idx + 1 === curMonth ? 'selected' : ''}>${m}</option>`
+                `<option value="${idx + 1}" class="bg-slate-900 text-slate-100" ${idx + 1 === curMonth ? 'selected' : ''}>${m}</option>`
             ).join('');
         }
         if (budgetYear) {
             const years = [curYear - 2, curYear - 1, curYear, curYear + 1];
             budgetYear.innerHTML = years.map(y =>
-                `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
+                `<option value="${y}" class="bg-slate-900 text-slate-100" ${y === curYear ? 'selected' : ''}>${y}</option>`
             ).join('');
         }
     },
@@ -371,22 +371,22 @@ const App = {
             const catFilter = document.getElementById('categoryFilter');
             const catSelect = document.getElementById('expenseCategory');
             if (catFilter) {
-                catFilter.innerHTML = '<option value="all">All Categories</option>' +
-                    categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                catFilter.innerHTML = '<option value="all" class="bg-slate-900 text-slate-100">All Categories</option>' +
+                    categories.map(c => `<option value="${c.name}" class="bg-slate-900 text-slate-100">${c.name}</option>`).join('');
             }
             if (catSelect) {
-                catSelect.innerHTML = categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+                catSelect.innerHTML = categories.map(c => `<option value="${c.name}" class="bg-slate-900 text-slate-100">${c.name}</option>`).join('');
             }
 
             // Populate payment method dropdowns
             const payFilter = document.getElementById('paymentFilter');
             const paySelect = document.getElementById('expensePaymentMethod');
             if (payFilter) {
-                payFilter.innerHTML = '<option value="all">All Payment Methods</option>' +
-                    paymentMethods.map(m => `<option value="${m}">${m}</option>`).join('');
+                payFilter.innerHTML = '<option value="all" class="bg-slate-900 text-slate-100">All Payment Methods</option>' +
+                    paymentMethods.map(m => `<option value="${m}" class="bg-slate-900 text-slate-100">${m}</option>`).join('');
             }
             if (paySelect) {
-                paySelect.innerHTML = paymentMethods.map(m => `<option value="${m}">${m}</option>`).join('');
+                paySelect.innerHTML = paymentMethods.map(m => `<option value="${m}" class="bg-slate-900 text-slate-100">${m}</option>`).join('');
             }
 
             // Set default date to today in expense form with max = today
@@ -462,6 +462,9 @@ const App = {
             if (this.state.periodMode === 'month') {
                 params.month = this.state.selectedMonth;
                 params.year = this.state.selectedYear;
+                params.period = 'month';
+            } else if (this.state.periodMode === 'all') {
+                params.period = 'all';
             }
 
             const kpis = await API.getSummaryKPIs(params);
@@ -480,7 +483,20 @@ const App = {
             // Update card title to reflect active period
             const monthTitleEl = document.getElementById('kpiMonthTitle');
             if (monthTitleEl) {
-                monthTitleEl.textContent = this.state.periodMode === 'all' ? 'All Time' : (period.label || 'This Month');
+                monthTitleEl.textContent = this.state.periodMode === 'all' ? 'This Month' : (period.label || 'This Month');
+            }
+
+            // Visual active indicator between Card 1 (Total / All-time) and Card 2 (Month view)
+            const totalCard = document.getElementById('kpiTotalCard');
+            const monthCard = document.getElementById('kpiMonthCard');
+            if (totalCard && monthCard) {
+                if (this.state.periodMode === 'all') {
+                    totalCard.classList.add('ring-2', 'ring-indigo-500/70', 'bg-indigo-950/20');
+                    monthCard.classList.remove('ring-2', 'ring-emerald-500/70', 'bg-emerald-950/20');
+                } else {
+                    monthCard.classList.add('ring-2', 'ring-emerald-500/70', 'bg-emerald-950/20');
+                    totalCard.classList.remove('ring-2', 'ring-indigo-500/70', 'bg-indigo-950/20');
+                }
             }
 
             // Total spent
@@ -571,7 +587,17 @@ const App = {
             }
 
             // Render Trend Chart
-            ChartsManager.renderTrendChart(trendsData);
+            const dailyBtn = document.getElementById('dailyTrendBtn');
+            const monthlyBtn = document.getElementById('monthlyTrendBtn');
+            if (this.state.periodMode === 'all') {
+                if (dailyBtn && monthlyBtn) {
+                    monthlyBtn.className = "px-3 py-1.5 text-xs font-semibold rounded-md bg-indigo-600 text-white transition";
+                    dailyBtn.className = "px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 text-slate-400 hover:text-slate-200 transition";
+                }
+                ChartsManager.renderTrendChart(trendsData, 'monthly');
+            } else {
+                ChartsManager.renderTrendChart(trendsData);
+            }
 
             // Render Payment Methods Progress
             const payEl = document.getElementById('paymentBreakdownList');

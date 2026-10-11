@@ -5,7 +5,7 @@ from database import get_db_connection
 class AnalyticsService:
 
     @staticmethod
-    def get_summary_kpis(mode="live", month=None, year=None):
+    def get_summary_kpis(mode="live", month=None, year=None, period_mode="month"):
         """Compute high-level Key Performance Indicators (KPIs) for the dashboard, respecting mode and period."""
         table = "demo_expenses" if mode == "demo" else "expenses"
         is_demo_val = 1 if mode == "demo" else 0
@@ -38,14 +38,17 @@ class AnalyticsService:
             cursor.execute(f"SELECT COALESCE(SUM(amount), 0) as total FROM {table} WHERE date = ?", (today_str,))
             today_spent = float(cursor.fetchone()["total"])
 
-            # 4. Highest Expense (for the selected month, or lifetime fallback)
+            # 4. Highest Expense (for the selected month, or lifetime in all-time view)
             cursor.execute(f"SELECT title, amount, category, date FROM {table} WHERE date LIKE ? ORDER BY amount DESC LIMIT 1", (month_prefix,))
             highest_in_month = cursor.fetchone()
 
             cursor.execute(f"SELECT title, amount, category, date FROM {table} ORDER BY amount DESC LIMIT 1")
             highest_lifetime = cursor.fetchone()
 
-            highest_expense = dict(highest_in_month) if highest_in_month else (dict(highest_lifetime) if highest_lifetime else None)
+            if period_mode == "all":
+                highest_expense = dict(highest_lifetime) if highest_lifetime else None
+            else:
+                highest_expense = dict(highest_in_month) if highest_in_month else (dict(highest_lifetime) if highest_lifetime else None)
 
             # 5. Average Daily Spend (for selected month)
             if target_year == now.year and target_month == now.month:
@@ -173,7 +176,12 @@ class AnalyticsService:
         months_list = []
         
         for i in range(months_back - 1, -1, -1):
-            dt = (now.replace(day=1) - timedelta(days=i * 28)).replace(day=1)
+            y = now.year
+            m = now.month - i
+            while m <= 0:
+                m += 12
+                y -= 1
+            dt = datetime(y, m, 1)
             months_list.append((dt.year, dt.month, dt.strftime("%b %Y"), f"{dt.year:04d}-{dt.month:02d}"))
 
         with get_db_connection() as conn:
