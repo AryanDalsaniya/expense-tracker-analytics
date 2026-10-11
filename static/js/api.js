@@ -15,6 +15,11 @@ const getApiBaseUrl = () => {
 
 const API_BASE = getApiBaseUrl();
 
+const withMode = (params = {}) => {
+    const mode = (window.App && window.App.state && window.App.state.activeMode) || 'live';
+    return { mode, ...params };
+};
+
 const API = {
     baseUrl: API_BASE,
 
@@ -32,7 +37,7 @@ const API = {
     // Expenses
     // -------------------------------------------------------------
     async getExpenses(params = {}) {
-        const query = new URLSearchParams(params).toString();
+        const query = new URLSearchParams(withMode(params)).toString();
         const res = await fetch(`${API_BASE}/api/expenses?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
@@ -40,8 +45,9 @@ const API = {
         return data.data;
     },
 
-    async getExpenseById(id) {
-        const res = await fetch(`${API_BASE}/api/expenses/${id}`);
+    async getExpenseById(id, params = {}) {
+        const query = new URLSearchParams(withMode(params)).toString();
+        const res = await fetch(`${API_BASE}/api/expenses/${id}?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Expense not found');
@@ -49,6 +55,7 @@ const API = {
     },
 
     async createExpense(expenseData) {
+        // New expenses are ALWAYS saved to user's real expenses
         const res = await fetch(`${API_BASE}/api/expenses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -82,7 +89,7 @@ const API = {
     async seedDemoData() {
         const res = await fetch(`${API_BASE}/api/expenses/seed`, { method: 'POST' });
         const data = await res.json();
-        if (!data.success) throw new Error(data.error || 'Failed to seed sample data');
+        if (!data.success) throw new Error(data.error || 'Failed to refresh demo data');
         return data;
     },
 
@@ -131,7 +138,7 @@ const API = {
     // Analytics & Budgets
     // -------------------------------------------------------------
     async getSummaryKPIs(params = {}) {
-        const query = new URLSearchParams(params).toString();
+        const query = new URLSearchParams(withMode(params)).toString();
         const res = await fetch(`${API_BASE}/api/analytics/summary?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
@@ -140,7 +147,7 @@ const API = {
     },
 
     async getCategoryAnalytics(params = {}) {
-        const query = new URLSearchParams(params).toString();
+        const query = new URLSearchParams(withMode(params)).toString();
         const res = await fetch(`${API_BASE}/api/analytics/categories?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
@@ -149,7 +156,7 @@ const API = {
     },
 
     async getTrends(params = {}) {
-        const query = new URLSearchParams(params).toString();
+        const query = new URLSearchParams(withMode(params)).toString();
         const res = await fetch(`${API_BASE}/api/analytics/trends?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
@@ -158,7 +165,7 @@ const API = {
     },
 
     async getPaymentAnalytics(params = {}) {
-        const query = new URLSearchParams(params).toString();
+        const query = new URLSearchParams(withMode(params)).toString();
         const res = await fetch(`${API_BASE}/api/analytics/payment-methods?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
@@ -167,7 +174,8 @@ const API = {
     },
 
     async updateBudget(amount, month = null, year = null) {
-        const payload = { amount: parseFloat(amount) };
+        const isDemo = (window.App && window.App.state && window.App.state.activeMode === 'demo') ? 1 : 0;
+        const payload = { amount: parseFloat(amount), is_demo: isDemo };
         if (month) payload.month = parseInt(month);
         if (year) payload.year = parseInt(year);
 

@@ -23,6 +23,8 @@ const App = {
         selectedMonth: new Date().getMonth() + 1,
         selectedYear: new Date().getFullYear(),
         periodMode: 'month', // 'month' or 'all'
+        // Active workspace mode: 'live' (real user expenses) or 'demo' (isolated sample sandbox)
+        activeMode: 'live',
         currentBudgetLimit: 1500.00
     },
 
@@ -31,6 +33,7 @@ const App = {
         this.bindEvents();
         await this.checkBackendConnection();
         this.initPeriodPickers();
+        this.updateModeUI();
         await this.loadInitialMetadata();
         await this.refreshAllData();
     },
@@ -46,6 +49,75 @@ const App = {
             }
         }
         return isHealthy;
+    },
+
+    // -------------------------------------------------------------
+    // Mode Switching: Live Tracker vs Demo Sandbox
+    // -------------------------------------------------------------
+    setMode(mode) {
+        if (this.state.activeMode === mode) return;
+        this.state.activeMode = mode;
+        this.state.page = 1;
+        this.updateModeUI();
+        this.refreshAllData();
+
+        if (mode === 'live') {
+            this.showToast('Switched to My Tracker (Your personal data)', 'success');
+        } else {
+            this.showToast('Switched to Demo Preview (Sample sandbox)', 'info');
+        }
+    },
+
+    updateModeUI() {
+        const liveBtn = document.getElementById('liveModeBtn');
+        const demoBtn = document.getElementById('demoModeBtn');
+        const demoBanner = document.getElementById('demoBanner');
+
+        if (this.state.activeMode === 'live') {
+            if (liveBtn) {
+                liveBtn.className = "px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 text-white shadow transition flex items-center gap-1.5";
+                liveBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span><span>My Tracker</span>';
+            }
+            if (demoBtn) {
+                demoBtn.className = "px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
+                demoBtn.innerHTML = '<span>👁️ Demo Preview</span>';
+            }
+            if (demoBanner) demoBanner.classList.add('hidden');
+        } else {
+            if (liveBtn) {
+                liveBtn.className = "px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5";
+                liveBtn.innerHTML = '<span>My Tracker</span>';
+            }
+            if (demoBtn) {
+                demoBtn.className = "px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 text-white shadow transition flex items-center gap-1.5";
+                demoBtn.innerHTML = '<span class="w-2 h-2 rounded-full bg-indigo-300 animate-pulse"></span><span>👁️ Demo Sandbox</span>';
+            }
+            if (demoBanner) demoBanner.classList.remove('hidden');
+        }
+    },
+
+    async resetDemoData() {
+        try {
+            await API.seedDemoData();
+            this.showToast('Sample demo sandbox refreshed with 28 sample expenses!', 'success');
+            await this.refreshAllData();
+        } catch (err) {
+            this.showToast(err.message, 'error');
+        }
+    },
+
+    exportCsv() {
+        const mode = this.state.activeMode || 'live';
+        window.location.href = `${API.baseUrl}/api/expenses/export?mode=${mode}`;
+    },
+
+    setQuickDate(daysAgo) {
+        const target = new Date();
+        target.setDate(target.getDate() - daysAgo);
+        const dateInput = document.getElementById('expenseDate');
+        if (dateInput) {
+            dateInput.value = target.toISOString().split('T')[0];
+        }
     },
 
     // Initialize month and year dropdowns
@@ -68,7 +140,7 @@ const App = {
             ).join('');
         }
         if (customYear) {
-            const years = [curYear - 1, curYear, curYear + 1];
+            const years = [curYear - 2, curYear - 1, curYear, curYear + 1];
             customYear.innerHTML = years.map(y =>
                 `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
             ).join('');
@@ -83,7 +155,7 @@ const App = {
             ).join('');
         }
         if (budgetYear) {
-            const years = [curYear - 1, curYear, curYear + 1];
+            const years = [curYear - 2, curYear - 1, curYear, curYear + 1];
             budgetYear.innerHTML = years.map(y =>
                 `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
             ).join('');
@@ -264,28 +336,16 @@ const App = {
             confirmDeleteBtn.addEventListener('click', () => this.handleConfirmDelete());
         }
 
-        // Seed data button
-        const seedBtn = document.getElementById('seedDemoBtn');
-        if (seedBtn) {
-            seedBtn.addEventListener('click', async () => {
-                try {
-                    await API.seedDemoData();
-                    this.showToast('Sample demo expenses loaded successfully!', 'success');
-                    await this.refreshAllData();
-                } catch (err) {
-                    this.showToast(err.message, 'error');
-                }
-            });
-        }
-
         // Start Fresh / Clear expenses buttons
         const clearNavBtn = document.getElementById('clearAllNavBtn');
         const clearBtn = document.getElementById('clearAllBtn');
         const handleClearAction = async () => {
-            if (confirm('Clear all recorded expenses and start fresh with an empty database?')) {
+            if (confirm('Clear all your recorded expenses? Your tracker will reset to an empty clean slate.')) {
                 try {
                     await API.clearExpenses();
-                    this.showToast('All expenses cleared. You now have a fresh clean tracker!', 'info');
+                    this.state.activeMode = 'live';
+                    this.updateModeUI();
+                    this.showToast('All real expenses cleared. Your tracker is now empty and fresh!', 'info');
                     await this.refreshAllData();
                 } catch (err) {
                     this.showToast(err.message, 'error');
@@ -329,10 +389,12 @@ const App = {
                 paySelect.innerHTML = paymentMethods.map(m => `<option value="${m}">${m}</option>`).join('');
             }
 
-            // Set default date to today in expense form
+            // Set default date to today in expense form with max = today
             const dateInput = document.getElementById('expenseDate');
+            const todayStr = new Date().toISOString().split('T')[0];
             if (dateInput) {
-                dateInput.value = new Date().toISOString().split('T')[0];
+                dateInput.value = todayStr;
+                dateInput.max = todayStr;
             }
         } catch (err) {
             console.error("Failed to load metadata:", err);
@@ -361,10 +423,17 @@ const App = {
         const periodFilter = document.getElementById('periodFilterSelect');
         if (periodFilter) periodFilter.value = 'this-month';
 
+        const now = new Date();
+        this.state.selectedMonth = now.getMonth() + 1;
+        this.state.selectedYear = now.getFullYear();
+
+        const customContainer = document.getElementById('customPeriodContainer');
+        if (customContainer) customContainer.classList.add('hidden');
+
         this.state.page = 1;
         this.refreshAllData();
         this.scrollToTable();
-        this.showToast('Filtered table to current month', 'info');
+        this.showToast('Filtered table to this month', 'info');
     },
 
     filterByHighestExpense() {
@@ -376,11 +445,11 @@ const App = {
         this.state.page = 1;
         this.loadExpenses();
         this.scrollToTable();
-        this.showToast('Sorted by highest transaction', 'info');
+        this.showToast('Sorted transactions by highest amount', 'info');
     },
 
     scrollToTable() {
-        const table = document.getElementById('expenseTableContainer');
+        const table = document.getElementById('expenseTableContainer') || document.getElementById('expenseEmptyState');
         if (table) {
             table.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
@@ -398,22 +467,28 @@ const App = {
             const kpis = await API.getSummaryKPIs(params);
             const period = kpis.period || {};
 
+            // Toggle Welcome Banner in Live Mode when transactions = 0
+            const welcomeHero = document.getElementById('liveWelcomeHero');
+            if (welcomeHero) {
+                if (this.state.activeMode === 'live' && kpis.total_transactions === 0) {
+                    welcomeHero.classList.remove('hidden');
+                } else {
+                    welcomeHero.classList.add('hidden');
+                }
+            }
+
             // Update card title to reflect active period
             const monthTitleEl = document.getElementById('kpiMonthTitle');
-            const periodLabelEl = document.getElementById('kpiPeriodLabel');
             if (monthTitleEl) {
                 monthTitleEl.textContent = this.state.periodMode === 'all' ? 'All Time' : (period.label || 'This Month');
             }
-            if (periodLabelEl) {
-                periodLabelEl.textContent = this.state.periodMode === 'all' ? 'Lifetime' : 'Active';
-            }
 
             // Total spent
-            document.getElementById('kpiTotalSpent').textContent = `$${kpis.total_spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            document.getElementById('kpiTotalSpent').textContent = `$${kpis.total_spent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             document.getElementById('kpiTotalCount').textContent = `${kpis.total_transactions} transactions`;
 
             // Monthly spent
-            document.getElementById('kpiMonthlySpent').textContent = `$${kpis.monthly_spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+            document.getElementById('kpiMonthlySpent').textContent = `$${kpis.monthly_spent.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             document.getElementById('kpiDailyAvg').textContent = `Avg ~$${kpis.daily_avg.toFixed(2)}/day`;
 
             // Budget Info
@@ -478,7 +553,7 @@ const App = {
             if (legendEl) {
                 const cats = catData.categories || [];
                 if (cats.length === 0) {
-                    legendEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No category data for this period</div>';
+                    legendEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No category data recorded yet</div>';
                 } else {
                     legendEl.innerHTML = cats.slice(0, 5).map(c => `
                         <div class="flex items-center justify-between py-1.5 border-b border-slate-800/60 last:border-0 text-xs">
@@ -502,7 +577,7 @@ const App = {
             const payEl = document.getElementById('paymentBreakdownList');
             if (payEl) {
                 if (paymentData.length === 0) {
-                    payEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No payment records for this period</div>';
+                    payEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No payment data recorded yet</div>';
                 } else {
                     payEl.innerHTML = paymentData.map(p => `
                         <div class="space-y-1">
@@ -561,12 +636,23 @@ const App = {
         const tbody = document.getElementById('expenseTableBody');
         const emptyState = document.getElementById('expenseEmptyState');
         const tableContainer = document.getElementById('expenseTableContainer');
+        const emptyHeading = document.getElementById('emptyStateHeading');
+        const emptyText = document.getElementById('emptyStateText');
 
         if (!tbody) return;
 
         if (expenses.length === 0) {
             tbody.innerHTML = '';
-            if (emptyState) emptyState.classList.remove('hidden');
+            if (emptyState) {
+                emptyState.classList.remove('hidden');
+                if (this.state.activeMode === 'live') {
+                    if (emptyHeading) emptyHeading.textContent = 'No expenses recorded yet';
+                    if (emptyText) emptyText.textContent = 'Start tracking your daily expenses to see category breakdowns and spending trends.';
+                } else {
+                    if (emptyHeading) emptyHeading.textContent = 'No demo records match current filters';
+                    if (emptyText) emptyText.textContent = 'Try adjusting your search query or period selector.';
+                }
+            }
             if (tableContainer) tableContainer.classList.add('hidden');
             return;
         }
@@ -650,9 +736,15 @@ const App = {
     openAddModal() {
         this.state.editingExpenseId = null;
         document.getElementById('modalTitle').textContent = 'Add New Expense';
-        document.getElementById('modalSubmitBtn').textContent = 'Add Expense';
+        document.getElementById('modalSubmitBtn').textContent = 'Save Expense';
         document.getElementById('expenseForm').reset();
-        document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+
+        const dateInput = document.getElementById('expenseDate');
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (dateInput) {
+            dateInput.value = todayStr;
+            dateInput.max = todayStr; // Cannot select future date
+        }
         document.getElementById('expenseModal').classList.remove('hidden');
     },
 
@@ -667,6 +759,10 @@ const App = {
             document.getElementById('expenseAmount').value = expense.amount;
             document.getElementById('expenseCategory').value = expense.category;
             document.getElementById('expenseDate').value = expense.date;
+            
+            const todayStr = new Date().toISOString().split('T')[0];
+            document.getElementById('expenseDate').max = todayStr;
+
             document.getElementById('expensePaymentMethod').value = expense.payment_method;
             document.getElementById('expenseNotes').value = expense.notes || '';
 
@@ -683,11 +779,19 @@ const App = {
 
     async handleExpenseSubmit(e) {
         e.preventDefault();
+        const dateVal = document.getElementById('expenseDate').value;
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        if (dateVal > todayStr) {
+            this.showToast('Expense date cannot be in the future. Pick today or any past day.', 'error');
+            return;
+        }
+
         const payload = {
             title: document.getElementById('expenseTitle').value,
             amount: parseFloat(document.getElementById('expenseAmount').value),
             category: document.getElementById('expenseCategory').value,
-            date: document.getElementById('expenseDate').value,
+            date: dateVal,
             payment_method: document.getElementById('expensePaymentMethod').value,
             notes: document.getElementById('expenseNotes').value
         };
@@ -698,7 +802,14 @@ const App = {
                 this.showToast('Expense updated successfully!', 'success');
             } else {
                 await API.createExpense(payload);
-                this.showToast('New expense recorded!', 'success');
+                // If user was previewing demo mode, switch to live tracker so they see their real expense
+                if (this.state.activeMode === 'demo') {
+                    this.state.activeMode = 'live';
+                    this.updateModeUI();
+                    this.showToast('New expense recorded! Switched to My Tracker to display your live spending.', 'success');
+                } else {
+                    this.showToast('New expense recorded and added to your tracker!', 'success');
+                }
             }
             this.closeExpenseModal();
             await this.refreshAllData();
@@ -747,13 +858,19 @@ const App = {
 
     async handleBudgetSubmit(e) {
         e.preventDefault();
-        const amount = document.getElementById('budgetAmountInput').value;
+        const amountVal = document.getElementById('budgetAmountInput').value;
+        const amount = parseFloat(amountVal);
+        if (isNaN(amount) || amount <= 0) {
+            this.showToast('Please enter a valid positive budget amount.', 'error');
+            return;
+        }
+
         const month = document.getElementById('budgetMonthSelect').value;
         const year = document.getElementById('budgetYearSelect').value;
 
         try {
             await API.updateBudget(amount, month, year);
-            this.showToast(`Budget of $${parseFloat(amount).toFixed(2)} saved for ${month}/${year}!`, 'success');
+            this.showToast(`Budget of $${amount.toFixed(2)} saved for ${month}/${year}!`, 'success');
             this.closeBudgetModal();
             await this.loadKPIs();
         } catch (err) {
