@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpendWise | Expense Tracker & Financial Analytics</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-indigo-500 selection:text-white">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl gradient-accent flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        SpendWise
+                        <span class="text-[10px] tracking-wider uppercase font-semibold px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">Analytics</span>
+                    </h1>
+                    <p class="text-xs text-slate-400 hidden sm:block">Personal Expense Intelligence & Portfolio Dashboard</p>
+                </div>
+            </div>
+
+            <!-- Header Action Controls -->
+            <div class="flex items-center gap-2.5">
+                <button id="seedDemoBtn"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                        title="Reset & Load 28+ realistic sample expenses">
+                    <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span class="hidden md:inline">Demo Data</span>
+                </button>
+
+                <a href="/api/expenses/export"
+                   class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                   title="Download all transactions as CSV">
+                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span class="hidden md:inline">Export CSV</span>
+                </a>
+
+                <button onclick="App.openAddModal()"
+                        class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 transition flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span>Add Expense</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
+
+        <!-- 1. KPI Cards Row -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- Card 1: Total Spend -->
+            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Recorded</span>
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                    </div>
+                </div>
+                <div id="kpiTotalSpent" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+                    <span id="kpiTotalCount" class="font-medium text-slate-300">0 transactions</span>
+                    <span>lifetime</span>
+                </div>
+            </div>
+
+            <!-- Card 2: This Month's Spend -->
+            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">This Month</span>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                </div>
+                <div id="kpiMonthlySpent" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
+                    <span id="kpiDailyAvg" class="text-slate-300">Avg ~$0.00/day</span>
+                    <span class="text-emerald-400">Current</span>
+                </div>
+            </div>
+
+            <!-- Card 3: Monthly Budget Progress -->
+            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Monthly Budget</span>
+                        <button onclick="App.openBudgetModal()" class="text-slate-400 hover:text-indigo-400 transition" title="Edit Budget Limit">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <span id="kpiBudgetBadge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Healthy (0%)
+                    </span>
+                </div>
+                <div class="flex items-baseline gap-1.5">
+                    <span id="kpiBudgetSpent" class="text-2xl font-extrabold text-white font-mono">$0.00</span>
+                    <span class="text-xs text-slate-500 font-mono">/ <span id="kpiBudgetLimit">$1,500.00</span></span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 rounded-full h-1.5 mt-2.5 overflow-hidden">
+                    <div id="kpiBudgetBar" class="h-full rounded-full transition-all duration-500 bg-emerald-500" style="width: 0%"></div>
+                </div>
+                <div id="kpiBudgetRemaining" class="mt-1 text-[11px] text-slate-400 text-right font-mono">$0.00 remaining</div>
+            </div>
+
+            <!-- Card 4: Highest Expense -->
+            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Highest Expense</span>
+                    <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                    </div>
+                </div>
+                <div id="kpiHighestAmount" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
+                <div class="mt-2 text-xs truncate">
+                    <div id="kpiHighestTitle" class="font-medium text-slate-200 truncate">None yet</div>
+                    <div id="kpiHighestDate" class="text-slate-500 text-[11px] truncate">No records</div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 2. Visual Analytics Section (Grid) -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+            <!-- Category Breakdown Doughnut Chart (4 cols) -->
+            <div class="lg:col-span-4 glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-sm font-bold text-white">Expenses by Category</h2>
+                        <p class="text-xs text-slate-400">Share of your total spending</p>
+                    </div>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Distribution</span>
+                </div>
+                
+                <div class="relative h-56 w-full flex items-center justify-center">
+                    <canvas id="categoryChartCanvas"></canvas>
+                </div>
+
+                <!-- Custom Category Legend List -->
+                <div id="categoryLegendList" class="mt-4 space-y-1">
+                    <!-- Populated via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Spending Trends Timeline (5 cols) -->
+            <div class="lg:col-span-5 glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-sm font-bold text-white">Spending Trends</h2>
+                        <p class="text-xs text-slate-400">Cash outflow over time</p>
+                    </div>
+                    <div class="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                        <button id="dailyTrendBtn" class="px-3 py-1.5 text-xs font-semibold rounded-md bg-indigo-600 text-white transition">Daily</button>
+                        <button id="monthlyTrendBtn" class="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-800 text-slate-400 hover:text-slate-200 transition">Monthly</button>
+                    </div>
+                </div>
+
+                <div class="relative h-64 w-full">
+                    <canvas id="trendChartCanvas"></canvas>
+                </div>
+
+                <div class="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                        Net Outflow Curve
+                    </span>
+                    <span class="font-mono text-slate-300">Updated in real-time</span>
+                </div>
+            </div>
+
+            <!-- Payment Methods Breakdown (3 cols) -->
+            <div class="lg:col-span-3 glass-card rounded-2xl p-5 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 class="text-sm font-bold text-white">Payment Modes</h2>
+                            <p class="text-xs text-slate-400">How you pay</p>
+                        </div>
+                    </div>
+
+                    <div id="paymentBreakdownList" class="space-y-3.5">
+                        <!-- Populated via JavaScript -->
+                    </div>
+                </div>
+
+                <div class="mt-5 p-3 rounded-xl bg-indigo-950/30 border border-indigo-900/40 text-xs text-indigo-300 space-y-1">
+                    <div class="font-semibold text-indigo-200 flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Financial Insight
+                    </div>
+                    <p class="text-[11px] leading-relaxed text-indigo-300/80">
+                        Digital payments (UPI & Cards) help track every small cent automatically compared to cash.
+                    </p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- 3. Transactions Section -->
+        <section class="glass-card rounded-2xl p-5 space-y-4">
+            
+            <!-- Filter & Search Toolbar -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-base font-bold text-white">Transaction History</h2>
+                    <p class="text-xs text-slate-400">Record, filter, search, and manage individual expenses</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                    <!-- Search Input -->
+                    <div class="relative">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input id="searchInput"
+                               type="text"
+                               placeholder="Search title, notes..."
+                               class="pl-9 pr-3 py-1.5 text-xs bg-slate-900/80 border border-slate-700/80 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-44 sm:w-56 transition">
+                    </div>
+
+                    <!-- Category Filter -->
+                    <select id="categoryFilter" class="py-1.5 px-3 text-xs bg-slate-900/80 border border-slate-700/80 rounded-lg text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition">
+                        <option value="all">All Categories</option>
+                    </select>
+
+                    <!-- Payment Method Filter -->
+                    <select id="paymentFilter" class="py-1.5 px-3 text-xs bg-slate-900/80 border border-slate-700/80 rounded-lg text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition">
+                        <option value="all">All Payment Methods</option>
+                    </select>
+
+                    <!-- Sort Order Filter -->
+                    <select id="sortSelect" class="py-1.5 px-3 text-xs bg-slate-900/80 border border-slate-700/80 rounded-lg text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition">
+                        <option value="date:DESC">Newest First</option>
+                        <option value="date:ASC">Oldest First</option>
+                        <option value="amount:DESC">Highest Amount</option>
+                        <option value="amount:ASC">Lowest Amount</option>
+                    </select>
+
+                    <!-- Clear all records -->
+                    <button id="clearAllBtn" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition" title="Clear all transactions">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div id="expenseTableContainer" class="overflow-x-auto rounded-xl border border-slate-800/80">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-400 font-semibold border-b border-slate-800">
+                        <tr>
+                            <th class="py-3 px-4">Title & Notes</th>
+                            <th class="py-3 px-4">Category</th>
+                            <th class="py-3 px-4">Date</th>
+                            <th class="py-3 px-4">Payment Method</th>
+                            <th class="py-3 px-4 text-right">Amount</th>
+                            <th class="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenseTableBody" class="divide-y divide-slate-800/60">
+                        <!-- Populated dynamically via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div id="expenseEmptyState" class="hidden py-12 text-center space-y-3">
+                <div class="w-12 h-12 rounded-2xl bg-slate-800/60 text-slate-400 flex items-center justify-center mx-auto">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m0 0l-6-6m6 6H3" />
+                    </svg>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-300">No transactions match your criteria</h3>
+                <p class="text-xs text-slate-500 max-w-sm mx-auto">Try clearing search filters or click "+ Add Expense" to record a new transaction.</p>
+            </div>
+
+            <!-- Pagination Toolbar -->
+            <div class="flex items-center justify-between pt-2 text-xs text-slate-400">
+                <span id="paginationInfo">Showing 0 of 0</span>
+                <div class="flex items-center gap-2">
+                    <button id="prevPageBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition">Previous</button>
+                    <button id="nextPageBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition">Next</button>
+                </div>
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p>Built with Flask, SQLite, Chart.js & Tailwind CSS • Full Stack Portfolio Project</p>
+            <div class="flex items-center gap-4 text-slate-400">
+                <span>Created by Aryan Dalsaniya</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: Add / Edit Expense                                -->
+    <!-- ======================================================== -->
+    <div id="expenseModal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden animate-fade-in p-4">
+        <div class="glass-card bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-md p-6 shadow-2xl relative space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 id="modalTitle" class="text-base font-bold text-white">Add New Expense</h3>
+                <button onclick="App.closeExpenseModal()" class="text-slate-400 hover:text-slate-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <form id="expenseForm" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-300 mb-1">Expense Title <span class="text-rose-400">*</span></label>
+                    <input id="expenseTitle" type="text" required placeholder="e.g. Grocery Shopping, Metro Ticket"
+                           class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Amount ($) <span class="text-rose-400">*</span></label>
+                        <input id="expenseAmount" type="number" step="0.01" min="0.01" required placeholder="0.00"
+                               class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Date <span class="text-rose-400">*</span></label>
+                        <input id="expenseDate" type="date" required
+                               class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Category <span class="text-rose-400">*</span></label>
+                        <select id="expenseCategory" required
+                                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Payment Method</label>
+                        <select id="expensePaymentMethod"
+                                class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-300 mb-1">Notes / Description (Optional)</label>
+                    <textarea id="expenseNotes" rows="2" placeholder="Additional details..."
+                              class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button type="button" onclick="App.closeExpenseModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">
+                        Cancel
+                    </button>
+                    <button id="modalSubmitBtn" type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/30 transition">
+                        Save Expense
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: Set Monthly Budget                                -->
+    <!-- ======================================================== -->
+    <div id="budgetModal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden animate-fade-in p-4">
+        <div class="glass-card bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-white">Set Monthly Budget</h3>
+                <button onclick="App.closeBudgetModal()" class="text-slate-400 hover:text-slate-200">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <form id="budgetForm" class="space-y-4 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-300 mb-1">Budget Limit for This Month ($)</label>
+                    <input id="budgetAmountInput" type="number" step="10" min="1" required placeholder="1500.00"
+                           class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
+                    <p class="mt-1 text-[11px] text-slate-500">SpendWise will calculate your remaining balance and show health alerts based on this threshold.</p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <button type="button" onclick="App.closeBudgetModal()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition">
+                        Update Budget
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- MODAL: Confirm Delete                                    -->
+    <!-- ======================================================== -->
+    <div id="deleteModal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop hidden animate-fade-in p-4">
+        <div class="glass-card bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-sm p-6 shadow-2xl relative space-y-4 text-center">
+            <div class="w-12 h-12 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-white">Delete Transaction?</h3>
+                <p class="text-xs text-slate-400 mt-1">This action cannot be undone. The expense will be permanently removed from your history and analytics.</p>
+            </div>
+            <div class="flex items-center justify-center gap-2 pt-2">
+                <button type="button" onclick="App.closeDeleteModal()" class="px-4 py-2 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium transition">
+                    Cancel
+                </button>
+                <button id="confirmDeleteBtn" type="button" class="px-4 py-2 text-xs rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-semibold transition">
+                    Yes, Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- JavaScript Application Modules -->
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
