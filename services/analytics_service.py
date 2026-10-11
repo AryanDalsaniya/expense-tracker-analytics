@@ -5,13 +5,16 @@ from database import get_db_connection
 class AnalyticsService:
 
     @staticmethod
-    def get_summary_kpis():
-        """Compute high-level Key Performance Indicators (KPIs) for the dashboard."""
+    def get_summary_kpis(month=None, year=None):
+        """Compute high-level Key Performance Indicators (KPIs) for the dashboard and selected period."""
         now = datetime.now()
-        current_year = now.year
-        current_month = now.month
+        target_year = int(year) if year else now.year
+        target_month = int(month) if month else now.month
+
+        month_prefix = f"{target_year:04d}-{target_month:02d}%"
         today_str = now.strftime("%Y-%m-%d")
-        month_prefix = f"{current_year:04d}-{current_month:02d}%"
+        _, num_days = calendar.monthrange(target_year, target_month)
+        month_label = f"{calendar.month_name[target_month]} {target_year}"
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -22,7 +25,7 @@ class AnalyticsService:
             total_spent = float(lifetime["total"])
             total_transactions = int(lifetime["count"])
 
-            # 2. Current Month Spending & Count
+            # 2. Selected Month Spending & Count
             cursor.execute("SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM expenses WHERE date LIKE ?", (month_prefix,))
             monthly = cursor.fetchone()
             monthly_spent = float(monthly["total"])
@@ -32,24 +35,42 @@ class AnalyticsService:
             cursor.execute("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?", (today_str,))
             today_spent = float(cursor.fetchone()["total"])
 
-            # 4. Highest Single Expense
-            cursor.execute("SELECT title, amount, category, date FROM expenses ORDER BY amount DESC LIMIT 1")
-            highest = cursor.fetchone()
-            highest_expense = dict(highest) if highest else None
+            # 4. Highest Expense (for the selected month, or lifetime fallback)
+            cursor.execute("SELECT title, amount, category, date FROM expenses WHERE date LIKE ? ORDER BY amount DESC LIMIT 1", (month_prefix,))
+            highest_in_month = cursor.fetchone()
 
-            # 5. Average Daily Spend (for current month)
-            days_passed = max(now.day, 1)
+            cursor.execute("SELECT title, amount, category, date FROM expenses ORDER BY amount DESC LIMIT 1")
+            highest_lifetime = cursor.fetchone()
+
+            highest_expense = dict(highest_in_month) if highest_in_month else (dict(highest_lifetime) if highest_lifetime else None)
+
+            # 5. Average Daily Spend (for selected month)
+            if target_year == now.year and target_month == now.month:
+                days_passed = max(now.day, 1)
+            else:
+                days_passed = max(num_days, 1)
+
             daily_avg = monthly_spent / days_passed
 
-            # 6. Budget Information
-            cursor.execute("SELECT amount FROM budgets WHERE month = ? AND year = ?", (current_month, current_year))
+            # 6. Budget Information for selected month/year
+            cursor.execute("SELECT amount FROM budgets WHERE month = ? AND year = ?", (target_month, target_year))
             budget_row = cursor.fetchone()
-            monthly_budget = float(budget_row["amount"]) if budget_row else 1500.00
+
+            # If no budget specifically for this month, find most recent budget or default to 1500
+            if budget_row:
+                monthly_budget = float(budget_row["amount"])
+            else:
+                cursor.execute("SELECT amount FROM budgets ORDER BY year DESC, month DESC LIMIT 1")
+                recent_budget = cursor.fetchone()
+                monthly_budget = float(recent_budget["amount"]) if recent_budget else 1500.00
             
             remaining_budget = monthly_budget - monthly_spent
             budget_percent = round((monthly_spent / monthly_budget) * 100, 1) if monthly_budget > 0 else 0
 
-            if budget_percent < 75:
+            if monthly_budget == 0:
+                budget_status = "No Budget"
+                budget_status_color = "slate"
+            elif budget_percent < 75:
                 budget_status = "Healthy"
                 budget_status_color = "emerald"
             elif budget_percent <= 100:
@@ -60,6 +81,11 @@ class AnalyticsService:
                 budget_status_color = "rose"
 
             return {
+                "period": {
+                    "month": target_month,
+                    "year": target_year,
+                    "label": month_label
+                },
                 "total_spent": round(total_spent, 2),
                 "total_transactions": total_transactions,
                 "monthly_spent": round(monthly_spent, 2),
@@ -79,8 +105,15 @@ class AnalyticsService:
             }
 
     @staticmethod
-    def get_category_breakdown(start_date=None, end_date=None):
+    def get_category_breakdown(start_date=None, end_date=None, month=None, year=None):
         """Aggregate total spending and percentage distribution by category."""
+        if month and year:
+            month = int(month)
+            year = int(year)
+            _, num_days = calendar.monthrange(year, month)
+            start_date = f"{year:04d}-{month:02d}-01"
+            end_date = f"{year:04d}-{month:02d}-{num_days:02d}"
+
         query = """
             SELECT e.category,
                    COALESCE(SUM(e.amount), 0) as total_amount,
@@ -160,14 +193,14 @@ class AnalyticsService:
             return results
 
     @staticmethod
-    def get_daily_trends():
-        """Retrieve daily spending data for the current active month."""
+    def get_daily_trends(month=None, year=None):
+        """Retrieve daily spending data for the chosen or current active month."""
         now = datetime.now()
-        current_year = now.year
-        current_month = now.month
-        month_prefix = f"{current_year:04d}-{current_month:02d}%"
+        target_year = int(year) if year else now.year
+        target_month = int(month) if month else now.month
+        month_prefix = f"{target_year:04d}-{target_month:02d}%"
 
-        _, num_days = calendar.monthrange(current_year, current_month)
+        _, num_days = calendar.monthrange(target_year, target_month)
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -182,33 +215,42 @@ class AnalyticsService:
             spending_by_date = {r["date"]: round(float(r["total"]), 2) for r in rows}
 
         days = []
+        # If looking at current month, only show up to today. If past month, show full month!
+        max_day = now.day if (target_year == now.year and target_month == now.month) else num_days
+
         for day in range(1, num_days + 1):
-            date_str = f"{current_year:04d}-{current_month:02d}-{day:02d}"
-            # Only up to today if it's the current month
-            if day > now.day:
+            date_str = f"{target_year:04d}-{target_month:02d}-{day:02d}"
+            if day > max_day:
                 break
             days.append({
                 "date": date_str,
                 "day": day,
-                "label": f"{day} {calendar.month_abbr[current_month]}",
+                "label": f"{day} {calendar.month_abbr[target_month]}",
                 "amount": spending_by_date.get(date_str, 0.0)
             })
 
         return days
 
     @staticmethod
-    def get_payment_breakdown():
-        """Compute spending totals grouped by payment method."""
+    def get_payment_breakdown(month=None, year=None):
+        """Compute spending totals grouped by payment method, optionally filtered by month/year."""
+        query = """
+            SELECT payment_method,
+                   COALESCE(SUM(amount), 0) as total,
+                   COUNT(*) as count
+            FROM expenses
+            WHERE 1=1
+        """
+        params = []
+        if month and year:
+            query += " AND date LIKE ?"
+            params.append(f"{int(year):04d}-{int(month):02d}%")
+
+        query += " GROUP BY payment_method ORDER BY total DESC"
+
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                SELECT payment_method,
-                       COALESCE(SUM(amount), 0) as total,
-                       COUNT(*) as count
-                FROM expenses
-                GROUP BY payment_method
-                ORDER BY total DESC
-            """)
+            cursor.execute(query, params)
             rows = cursor.fetchall()
             total_sum = sum(float(r["total"]) for r in rows)
 
@@ -226,8 +268,8 @@ class AnalyticsService:
     def set_monthly_budget(amount, month=None, year=None):
         """Set or update monthly budget for given month/year."""
         now = datetime.now()
-        month = month or now.month
-        year = year or now.year
+        month = int(month) if month else now.month
+        year = int(year) if year else now.year
 
         try:
             budget_amount = float(amount)
@@ -246,4 +288,3 @@ class AnalyticsService:
             conn.commit()
 
         return {"month": month, "year": year, "amount": budget_amount}
-

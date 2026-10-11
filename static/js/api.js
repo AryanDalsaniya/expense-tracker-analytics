@@ -130,8 +130,9 @@ const API = {
     // -------------------------------------------------------------
     // Analytics & Budgets
     // -------------------------------------------------------------
-    async getSummaryKPIs() {
-        const res = await fetch(`${API_BASE}/api/analytics/summary`);
+    async getSummaryKPIs(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        const res = await fetch(`${API_BASE}/api/analytics/summary?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error('Failed to load KPIs');
@@ -147,27 +148,33 @@ const API = {
         return data.data;
     },
 
-    async getTrends() {
-        const res = await fetch(`${API_BASE}/api/analytics/trends`);
+    async getTrends(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        const res = await fetch(`${API_BASE}/api/analytics/trends?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error('Failed to load trends');
         return data.data;
     },
 
-    async getPaymentAnalytics() {
-        const res = await fetch(`${API_BASE}/api/analytics/payment-methods`);
+    async getPaymentAnalytics(params = {}) {
+        const query = new URLSearchParams(params).toString();
+        const res = await fetch(`${API_BASE}/api/analytics/payment-methods?${query}`);
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         if (!data.success) throw new Error('Failed to load payment analytics');
         return data.data;
     },
 
-    async updateBudget(amount) {
+    async updateBudget(amount, month = null, year = null) {
+        const payload = { amount: parseFloat(amount) };
+        if (month) payload.month = parseInt(month);
+        if (year) payload.year = parseInt(year);
+
         const res = await fetch(`${API_BASE}/api/budget`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ amount: parseFloat(amount) })
+            body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Failed to update budget');

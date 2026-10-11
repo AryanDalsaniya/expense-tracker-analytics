@@ -15,9 +15,9 @@ def create_app():
     # Enable CORS for cross-origin development (e.g. Live Server, Vite, port 5500)
     CORS(app, resources={r"/api/*": {"origins": "*"}})
 
-    # Initialize database on app startup
+    # Initialize database on app startup (do not auto-seed demo data, keep empty for user)
     with app.app_context():
-        init_db(seed_if_empty=True)
+        init_db(seed_if_empty=False)
 
     # -----------------------------------------
     # Frontend Routes
@@ -126,25 +126,33 @@ def create_app():
     # -----------------------------------------
     @app.route("/api/analytics/summary", methods=["GET"])
     def get_summary_kpis():
-        kpis = AnalyticsService.get_summary_kpis()
+        month = request.args.get("month", type=int)
+        year = request.args.get("year", type=int)
+        kpis = AnalyticsService.get_summary_kpis(month=month, year=year)
         return jsonify({"success": True, "data": kpis})
 
     @app.route("/api/analytics/categories", methods=["GET"])
     def get_category_analytics():
+        month = request.args.get("month", type=int)
+        year = request.args.get("year", type=int)
         start_date = request.args.get("start_date", "")
         end_date = request.args.get("end_date", "")
-        breakdown = AnalyticsService.get_category_breakdown(start_date=start_date, end_date=end_date)
+        breakdown = AnalyticsService.get_category_breakdown(start_date=start_date, end_date=end_date, month=month, year=year)
         return jsonify({"success": True, "data": breakdown})
 
     @app.route("/api/analytics/trends", methods=["GET"])
     def get_trends():
+        month = request.args.get("month", type=int)
+        year = request.args.get("year", type=int)
         monthly = AnalyticsService.get_monthly_trends()
-        daily = AnalyticsService.get_daily_trends()
+        daily = AnalyticsService.get_daily_trends(month=month, year=year)
         return jsonify({"success": True, "data": {"monthly": monthly, "daily": daily}})
 
     @app.route("/api/analytics/payment-methods", methods=["GET"])
     def get_payment_methods_analytics():
-        methods = AnalyticsService.get_payment_breakdown()
+        month = request.args.get("month", type=int)
+        year = request.args.get("year", type=int)
+        methods = AnalyticsService.get_payment_breakdown(month=month, year=year)
         return jsonify({"success": True, "data": methods})
 
     @app.route("/api/budget", methods=["POST"])

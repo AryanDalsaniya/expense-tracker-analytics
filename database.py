@@ -12,7 +12,7 @@ def get_db_connection():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-def init_db(seed_if_empty=True):
+def init_db(seed_if_empty=False):
     """Initialize database tables and seed initial defaults."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
