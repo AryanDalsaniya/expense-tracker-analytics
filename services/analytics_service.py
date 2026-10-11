@@ -246,3 +246,4 @@ class AnalyticsService:
             conn.commit()
 
         return {"month": month, "year": year, "amount": budget_amount}
+

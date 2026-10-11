@@ -181,3 +181,4 @@ const ChartsManager = {
 };
 
 window.ChartsManager = ChartsManager;
+

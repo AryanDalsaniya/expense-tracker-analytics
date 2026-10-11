@@ -228,3 +228,4 @@ class ExpenseService:
             ])
 
         return output.getvalue()
+
