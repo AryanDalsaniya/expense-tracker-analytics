@@ -12,8 +12,8 @@ def get_db_connection():
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
-def init_db(seed_if_empty=False):
-    """Initialize database tables and seed initial defaults."""
+def init_db(seed_demo=True):
+    """Initialize database tables. Real user expenses are kept completely separate from demo preview data."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -27,7 +27,7 @@ def init_db(seed_if_empty=False):
             )
         """)
 
-        # 2. Expenses Table
+        # 2. Real User Expenses Table (Starts empty and strictly stores user-added transactions)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,17 +41,62 @@ def init_db(seed_if_empty=False):
             )
         """)
 
-        # 3. Monthly Budgets Table
+        # 3. Demo Preview Expenses Table (Isolated sandbox for demo preview)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS demo_expenses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                amount REAL NOT NULL CHECK(amount > 0),
+                category TEXT NOT NULL,
+                date TEXT NOT NULL,
+                payment_method TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 4. Monthly Budgets Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS budgets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 month INTEGER NOT NULL,
                 year INTEGER NOT NULL,
                 amount REAL NOT NULL CHECK(amount > 0),
+                is_demo INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(month, year)
+                UNIQUE(month, year, is_demo)
             )
         """)
+
+        # Migrate budgets table if it has the old UNIQUE(month, year) constraint
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='budgets'")
+        table_sql_row = cursor.fetchone()
+        if table_sql_row and "UNIQUE(month, year)" in table_sql_row["sql"] and "UNIQUE(month, year, is_demo)" not in table_sql_row["sql"]:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS budgets_migration (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    month INTEGER NOT NULL,
+                    year INTEGER NOT NULL,
+                    amount REAL NOT NULL CHECK(amount > 0),
+                    is_demo INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(month, year, is_demo)
+                )
+            """)
+            cursor.execute("""
+                INSERT OR IGNORE INTO budgets_migration (id, month, year, amount, is_demo, created_at)
+                SELECT id, month, year, amount, 1, created_at FROM budgets
+            """)
+            cursor.execute("DROP TABLE budgets")
+            cursor.execute("ALTER TABLE budgets_migration RENAME TO budgets")
+
+        # Check if is_demo column exists in budgets, add if missing
+        cursor.execute("PRAGMA table_info(budgets)")
+        budget_cols = [col["name"] for col in cursor.fetchall()]
+        if "is_demo" not in budget_cols:
+            cursor.execute("ALTER TABLE budgets ADD COLUMN is_demo INTEGER DEFAULT 0")
+
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_budgets_month_year_demo ON budgets(month, year, is_demo)")
 
         # Seed categories if missing
         cursor.execute("SELECT COUNT(*) as count FROM categories")
@@ -64,14 +109,14 @@ def init_db(seed_if_empty=False):
 
         conn.commit()
 
-        # Check if expenses exist; if not, seed realistic sample data
-        if seed_if_empty:
-            cursor.execute("SELECT COUNT(*) as count FROM expenses")
+        # Populate demo_expenses sandbox if empty
+        if seed_demo:
+            cursor.execute("SELECT COUNT(*) as count FROM demo_expenses")
             if cursor.fetchone()["count"] == 0:
                 seed_sample_data(conn)
 
 def seed_sample_data(conn=None):
-    """Seed realistic expense records across the past 45 days for demo & analytics."""
+    """Seed sample records strictly into the demo_expenses preview table."""
     close_conn = False
     if conn is None:
         conn = get_db_connection()
@@ -112,29 +157,24 @@ def seed_sample_data(conn=None):
 
     today = datetime.now()
 
-    # Clear existing expenses if seeding on demand
-    cursor.execute("DELETE FROM expenses")
+    # Clear demo sandbox table only
+    cursor.execute("DELETE FROM demo_expenses")
 
     for i, (title, base_amount, category, payment_method, notes) in enumerate(sample_items):
-        # Distribute dates evenly over last 40 days
         days_ago = (i * 40) // len(sample_items)
         expense_date = (today - timedelta(days=days_ago)).strftime("%Y-%m-%d")
-        
-        # Add slight variation to amounts
-        amount = round(base_amount * random.uniform(0.92, 1.08), 2)
+        amount = round(base_amount * random.uniform(0.94, 1.06), 2)
 
         cursor.execute("""
-            INSERT INTO expenses (title, amount, category, date, payment_method, notes)
+            INSERT INTO demo_expenses (title, amount, category, date, payment_method, notes)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (title, amount, category, expense_date, payment_method, notes))
 
-    # Set default monthly budget for current month & year
-    current_month = today.month
-    current_year = today.year
+    # Set default demo monthly budget for current month & year
     cursor.execute("""
-        INSERT OR REPLACE INTO budgets (month, year, amount)
-        VALUES (?, ?, ?)
-    """, (current_month, current_year, 1500.00))
+        INSERT OR REPLACE INTO budgets (month, year, amount, is_demo)
+        VALUES (?, ?, ?, 1)
+    """, (today.month, today.year, 1500.00))
 
     conn.commit()
     if close_conn:
@@ -142,4 +182,4 @@ def seed_sample_data(conn=None):
 
 if __name__ == "__main__":
     init_db()
-    print("Database initialized and sample data seeded successfully.")
+    print("Database initialized. Real user expenses are kept separate from demo data.")

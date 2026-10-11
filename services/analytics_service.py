@@ -5,8 +5,11 @@ from database import get_db_connection
 class AnalyticsService:
 
     @staticmethod
-    def get_summary_kpis(month=None, year=None):
-        """Compute high-level Key Performance Indicators (KPIs) for the dashboard and selected period."""
+    def get_summary_kpis(mode="live", month=None, year=None):
+        """Compute high-level Key Performance Indicators (KPIs) for the dashboard, respecting mode and period."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
+        is_demo_val = 1 if mode == "demo" else 0
+
         now = datetime.now()
         target_year = int(year) if year else now.year
         target_month = int(month) if month else now.month
@@ -20,26 +23,26 @@ class AnalyticsService:
             cursor = conn.cursor()
 
             # 1. Total Lifetime Spending & Count
-            cursor.execute("SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM expenses")
+            cursor.execute(f"SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM {table}")
             lifetime = cursor.fetchone()
             total_spent = float(lifetime["total"])
             total_transactions = int(lifetime["count"])
 
             # 2. Selected Month Spending & Count
-            cursor.execute("SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM expenses WHERE date LIKE ?", (month_prefix,))
+            cursor.execute(f"SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count FROM {table} WHERE date LIKE ?", (month_prefix,))
             monthly = cursor.fetchone()
             monthly_spent = float(monthly["total"])
             monthly_transactions = int(monthly["count"])
 
             # 3. Today's Spending
-            cursor.execute("SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?", (today_str,))
+            cursor.execute(f"SELECT COALESCE(SUM(amount), 0) as total FROM {table} WHERE date = ?", (today_str,))
             today_spent = float(cursor.fetchone()["total"])
 
             # 4. Highest Expense (for the selected month, or lifetime fallback)
-            cursor.execute("SELECT title, amount, category, date FROM expenses WHERE date LIKE ? ORDER BY amount DESC LIMIT 1", (month_prefix,))
+            cursor.execute(f"SELECT title, amount, category, date FROM {table} WHERE date LIKE ? ORDER BY amount DESC LIMIT 1", (month_prefix,))
             highest_in_month = cursor.fetchone()
 
-            cursor.execute("SELECT title, amount, category, date FROM expenses ORDER BY amount DESC LIMIT 1")
+            cursor.execute(f"SELECT title, amount, category, date FROM {table} ORDER BY amount DESC LIMIT 1")
             highest_lifetime = cursor.fetchone()
 
             highest_expense = dict(highest_in_month) if highest_in_month else (dict(highest_lifetime) if highest_lifetime else None)
@@ -50,17 +53,16 @@ class AnalyticsService:
             else:
                 days_passed = max(num_days, 1)
 
-            daily_avg = monthly_spent / days_passed
+            daily_avg = monthly_spent / days_passed if monthly_spent > 0 else 0.0
 
-            # 6. Budget Information for selected month/year
-            cursor.execute("SELECT amount FROM budgets WHERE month = ? AND year = ?", (target_month, target_year))
+            # 6. Budget Information for selected month/year and mode
+            cursor.execute("SELECT amount FROM budgets WHERE month = ? AND year = ? AND is_demo = ?", (target_month, target_year, is_demo_val))
             budget_row = cursor.fetchone()
 
-            # If no budget specifically for this month, find most recent budget or default to 1500
             if budget_row:
                 monthly_budget = float(budget_row["amount"])
             else:
-                cursor.execute("SELECT amount FROM budgets ORDER BY year DESC, month DESC LIMIT 1")
+                cursor.execute("SELECT amount FROM budgets WHERE is_demo = ? ORDER BY year DESC, month DESC LIMIT 1", (is_demo_val,))
                 recent_budget = cursor.fetchone()
                 monthly_budget = float(recent_budget["amount"]) if recent_budget else 1500.00
             
@@ -86,6 +88,7 @@ class AnalyticsService:
                     "year": target_year,
                     "label": month_label
                 },
+                "mode": mode,
                 "total_spent": round(total_spent, 2),
                 "total_transactions": total_transactions,
                 "monthly_spent": round(monthly_spent, 2),
@@ -105,8 +108,10 @@ class AnalyticsService:
             }
 
     @staticmethod
-    def get_category_breakdown(start_date=None, end_date=None, month=None, year=None):
-        """Aggregate total spending and percentage distribution by category."""
+    def get_category_breakdown(mode="live", start_date=None, end_date=None, month=None, year=None):
+        """Aggregate total spending and percentage distribution by category from active mode table."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
+
         if month and year:
             month = int(month)
             year = int(year)
@@ -114,13 +119,13 @@ class AnalyticsService:
             start_date = f"{year:04d}-{month:02d}-01"
             end_date = f"{year:04d}-{month:02d}-{num_days:02d}"
 
-        query = """
+        query = f"""
             SELECT e.category,
                    COALESCE(SUM(e.amount), 0) as total_amount,
                    COUNT(e.id) as count,
                    COALESCE(c.color, '#64748b') as color,
                    COALESCE(c.icon, 'tag') as icon
-            FROM expenses e
+            FROM {table} e
             LEFT JOIN categories c ON e.category = c.name
             WHERE 1=1
         """
@@ -156,16 +161,17 @@ class AnalyticsService:
 
             return {
                 "categories": categories,
-                "total_amount": round(total_sum, 2)
+                "total_amount": round(total_sum, 2),
+                "mode": mode
             }
 
     @staticmethod
-    def get_monthly_trends(months_back=6):
-        """Calculate month-by-month spending trends for the last N months."""
+    def get_monthly_trends(mode="live", months_back=6):
+        """Calculate month-by-month spending trends for the last N months from active mode table."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
         now = datetime.now()
         months_list = []
         
-        # Build list of year-month keys
         for i in range(months_back - 1, -1, -1):
             dt = (now.replace(day=1) - timedelta(days=i * 28)).replace(day=1)
             months_list.append((dt.year, dt.month, dt.strftime("%b %Y"), f"{dt.year:04d}-{dt.month:02d}"))
@@ -175,9 +181,9 @@ class AnalyticsService:
             results = []
 
             for year, month, label, key in months_list:
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT COALESCE(SUM(amount), 0) as total, COUNT(*) as count
-                    FROM expenses
+                    FROM {table}
                     WHERE date LIKE ?
                 """, (f"{key}%",))
                 row = cursor.fetchone()
@@ -193,8 +199,9 @@ class AnalyticsService:
             return results
 
     @staticmethod
-    def get_daily_trends(month=None, year=None):
-        """Retrieve daily spending data for the chosen or current active month."""
+    def get_daily_trends(mode="live", month=None, year=None):
+        """Retrieve daily spending data for chosen month from active mode table."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
         now = datetime.now()
         target_year = int(year) if year else now.year
         target_month = int(month) if month else now.month
@@ -204,9 +211,9 @@ class AnalyticsService:
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT date, COALESCE(SUM(amount), 0) as total, COUNT(*) as count
-                FROM expenses
+                FROM {table}
                 WHERE date LIKE ?
                 GROUP BY date
                 ORDER BY date ASC
@@ -215,7 +222,6 @@ class AnalyticsService:
             spending_by_date = {r["date"]: round(float(r["total"]), 2) for r in rows}
 
         days = []
-        # If looking at current month, only show up to today. If past month, show full month!
         max_day = now.day if (target_year == now.year and target_month == now.month) else num_days
 
         for day in range(1, num_days + 1):
@@ -232,13 +238,14 @@ class AnalyticsService:
         return days
 
     @staticmethod
-    def get_payment_breakdown(month=None, year=None):
-        """Compute spending totals grouped by payment method, optionally filtered by month/year."""
-        query = """
+    def get_payment_breakdown(mode="live", month=None, year=None):
+        """Compute spending totals grouped by payment method from active mode table."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
+        query = f"""
             SELECT payment_method,
                    COALESCE(SUM(amount), 0) as total,
                    COUNT(*) as count
-            FROM expenses
+            FROM {table}
             WHERE 1=1
         """
         params = []
@@ -265,11 +272,12 @@ class AnalyticsService:
             ]
 
     @staticmethod
-    def set_monthly_budget(amount, month=None, year=None):
+    def set_monthly_budget(amount, month=None, year=None, is_demo=0):
         """Set or update monthly budget for given month/year."""
         now = datetime.now()
         month = int(month) if month else now.month
         year = int(year) if year else now.year
+        is_demo_val = 1 if is_demo else 0
 
         try:
             budget_amount = float(amount)
@@ -280,11 +288,15 @@ class AnalyticsService:
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO budgets (month, year, amount)
-                VALUES (?, ?, ?)
-                ON CONFLICT(month, year) DO UPDATE SET amount = excluded.amount
-            """, (month, year, budget_amount))
+            cursor.execute("SELECT id FROM budgets WHERE month = ? AND year = ? AND is_demo = ?", (month, year, is_demo_val))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute("UPDATE budgets SET amount = ? WHERE id = ?", (budget_amount, row["id"]))
+            else:
+                cursor.execute(
+                    "INSERT INTO budgets (month, year, amount, is_demo) VALUES (?, ?, ?, ?)",
+                    (month, year, budget_amount, is_demo_val)
+                )
             conn.commit()
 
-        return {"month": month, "year": year, "amount": budget_amount}
+        return {"month": month, "year": year, "amount": budget_amount, "is_demo": is_demo_val}

@@ -22,9 +22,17 @@ class ExpenseService:
     @staticmethod
     def get_all_expenses(search=None, category=None, payment_method=None,
                          start_date=None, end_date=None, sort_by="date",
-                         order="DESC", limit=None, offset=None):
-        """Retrieve filtered, sorted, and paginated expense transactions."""
-        query = "SELECT e.id, e.title, e.amount, e.category, e.date, e.payment_method, e.notes, e.created_at, c.color as category_color, c.icon as category_icon FROM expenses e LEFT JOIN categories c ON e.category = c.name WHERE 1=1"
+                         order="DESC", limit=None, offset=None, mode="live"):
+        """Retrieve filtered, sorted, and paginated expense transactions from real or demo table."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
+
+        query = f"""
+            SELECT e.id, e.title, e.amount, e.category, e.date, e.payment_method, e.notes, e.created_at,
+                   c.color as category_color, c.icon as category_icon
+            FROM {table} e
+            LEFT JOIN categories c ON e.category = c.name
+            WHERE 1=1
+        """
         params = []
 
         if search:
@@ -66,7 +74,7 @@ class ExpenseService:
             rows = cursor.fetchall()
 
             # Count total matching records for pagination
-            count_query = "SELECT COUNT(*) as total FROM expenses e WHERE 1=1"
+            count_query = f"SELECT COUNT(*) as total FROM {table} e WHERE 1=1"
             count_params = []
             if search:
                 count_query += " AND (e.title LIKE ? OR e.notes LIKE ?)"
@@ -89,17 +97,19 @@ class ExpenseService:
 
             return {
                 "expenses": [dict(r) for r in rows],
-                "total_count": total_count
+                "total_count": total_count,
+                "mode": mode
             }
 
     @staticmethod
-    def get_expense_by_id(expense_id):
+    def get_expense_by_id(expense_id, mode="live"):
         """Fetch single expense transaction by ID."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT e.*, c.color as category_color, c.icon as category_icon
-                FROM expenses e
+                FROM {table} e
                 LEFT JOIN categories c ON e.category = c.name
                 WHERE e.id = ?
             """, (expense_id,))
@@ -108,7 +118,7 @@ class ExpenseService:
 
     @staticmethod
     def create_expense(data):
-        """Validate and insert a new expense transaction."""
+        """Validate and insert a new real expense transaction into the live table."""
         title = data.get("title", "").strip()
         category = data.get("category", "").strip()
         date = data.get("date", "").strip()
@@ -138,12 +148,12 @@ class ExpenseService:
             new_id = cursor.lastrowid
             conn.commit()
 
-        return ExpenseService.get_expense_by_id(new_id)
+        return ExpenseService.get_expense_by_id(new_id, mode="live")
 
     @staticmethod
     def update_expense(expense_id, data):
-        """Validate and update an existing expense transaction."""
-        existing = ExpenseService.get_expense_by_id(expense_id)
+        """Validate and update an existing real expense transaction."""
+        existing = ExpenseService.get_expense_by_id(expense_id, mode="live")
         if not existing:
             return None
 
@@ -172,11 +182,11 @@ class ExpenseService:
             """, (title, amount, category, date, payment_method, notes, expense_id))
             conn.commit()
 
-        return ExpenseService.get_expense_by_id(expense_id)
+        return ExpenseService.get_expense_by_id(expense_id, mode="live")
 
     @staticmethod
     def delete_expense(expense_id):
-        """Delete an expense transaction by ID."""
+        """Delete a real expense transaction by ID."""
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
@@ -186,7 +196,7 @@ class ExpenseService:
 
     @staticmethod
     def clear_all_expenses():
-        """Delete all recorded expenses."""
+        """Clear real user expenses table only. Demo preview data is left safe and untouched."""
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM expenses")
@@ -195,18 +205,19 @@ class ExpenseService:
 
     @staticmethod
     def seed_demo_data():
-        """Reset and seed realistic sample data."""
+        """Reset and refresh the demo preview sandbox data."""
         seed_sample_data()
         return True
 
     @staticmethod
-    def export_csv():
-        """Export all expenses as formatted CSV."""
+    def export_csv(mode="live"):
+        """Export expenses as formatted CSV from the active mode."""
+        table = "demo_expenses" if mode == "demo" else "expenses"
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT id, title, amount, category, date, payment_method, notes, created_at
-                FROM expenses
+                FROM {table}
                 ORDER BY date DESC, id DESC
             """)
             rows = cursor.fetchall()
@@ -228,4 +239,3 @@ class ExpenseService:
             ])
 
         return output.getvalue()
-
