@@ -3,17 +3,32 @@ Automated Integration and Unit Tests for SpendWise
 Validates mode isolation, CRUD workflows, custom budget settings, and real-time analytics.
 """
 
+import os
 import json
+import tempfile
 from datetime import datetime
 import unittest
+from config import Config
+from database import init_db, get_db_connection
 from app import create_app
-from database import get_db_connection
 
 class SpendWiseTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.temp_dir = tempfile.TemporaryDirectory()
+        cls.orig_db_path = Config.DATABASE_PATH
+        Config.DATABASE_PATH = os.path.join(cls.temp_dir.name, "test_expenses.db")
+        init_db(seed_demo=True)
         cls.app = create_app()
         cls.client = cls.app.test_client()
+
+    @classmethod
+    def tearDownClass(cls):
+        Config.DATABASE_PATH = cls.orig_db_path
+        try:
+            cls.temp_dir.cleanup()
+        except Exception:
+            pass
 
     def test_01_live_mode_empty_slate(self):
         """Live mode must start 100% empty with zero transactions."""

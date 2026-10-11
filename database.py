@@ -2,15 +2,20 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 import random
+from contextlib import contextmanager
 from config import Config
 
+@contextmanager
 def get_db_connection():
-    """Establish and return a SQLite database connection with row factory configured."""
+    """Establish and yield a SQLite connection with row factory, closing it reliably."""
     os.makedirs(os.path.dirname(Config.DATABASE_PATH), exist_ok=True)
     conn = sqlite3.connect(Config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def init_db(seed_demo=True):
     """Initialize database tables. Real user expenses are kept completely separate from demo preview data."""
@@ -117,10 +122,10 @@ def init_db(seed_demo=True):
 
 def seed_sample_data(conn=None):
     """Seed sample records strictly into the demo_expenses preview table."""
-    close_conn = False
     if conn is None:
-        conn = get_db_connection()
-        close_conn = True
+        with get_db_connection() as new_conn:
+            seed_sample_data(new_conn)
+        return
 
     cursor = conn.cursor()
 
@@ -177,8 +182,6 @@ def seed_sample_data(conn=None):
     """, (today.month, today.year, 1500.00))
 
     conn.commit()
-    if close_conn:
-        conn.close()
 
 if __name__ == "__main__":
     init_db()
