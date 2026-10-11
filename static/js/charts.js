@@ -19,12 +19,33 @@ const ChartsManager = {
         }
 
         const categories = categoriesData.categories || [];
-        if (categories.length === 0) {
+        if (typeof Chart === 'undefined') {
+            console.warn('Chart.js CDN unavailable.');
             return;
         }
 
-        if (typeof Chart === 'undefined') {
-            console.warn('Chart.js CDN unavailable.');
+        if (categories.length === 0) {
+            this.categoryChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['No Expenses Recorded'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['#1e293b'],
+                        borderColor: '#0f172a',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '72%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    }
+                }
+            });
             return;
         }
 

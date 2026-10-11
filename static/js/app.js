@@ -18,13 +18,19 @@ const App = {
         editingExpenseId: null,
         deleteTargetId: null,
         categories: [],
-        paymentMethods: []
+        paymentMethods: [],
+        // Selected period for analytics & filtering
+        selectedMonth: new Date().getMonth() + 1,
+        selectedYear: new Date().getFullYear(),
+        periodMode: 'month', // 'month' or 'all'
+        currentBudgetLimit: 1500.00
     },
 
     // Initialize application on DOM ready
     async init() {
         this.bindEvents();
         await this.checkBackendConnection();
+        this.initPeriodPickers();
         await this.loadInitialMetadata();
         await this.refreshAllData();
     },
@@ -40,6 +46,48 @@ const App = {
             }
         }
         return isHealthy;
+    },
+
+    // Initialize month and year dropdowns
+    initPeriodPickers() {
+        const now = new Date();
+        const curMonth = now.getMonth() + 1;
+        const curYear = now.getFullYear();
+
+        const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ];
+
+        // Populate Custom Period selectors in header
+        const customMonth = document.getElementById('customMonthSelect');
+        const customYear = document.getElementById('customYearSelect');
+        if (customMonth) {
+            customMonth.innerHTML = monthNames.map((m, idx) =>
+                `<option value="${idx + 1}" ${idx + 1 === curMonth ? 'selected' : ''}>${m.substring(0, 3)}</option>`
+            ).join('');
+        }
+        if (customYear) {
+            const years = [curYear - 1, curYear, curYear + 1];
+            customYear.innerHTML = years.map(y =>
+                `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
+            ).join('');
+        }
+
+        // Populate Budget Modal month/year selectors
+        const budgetMonth = document.getElementById('budgetMonthSelect');
+        const budgetYear = document.getElementById('budgetYearSelect');
+        if (budgetMonth) {
+            budgetMonth.innerHTML = monthNames.map((m, idx) =>
+                `<option value="${idx + 1}" ${idx + 1 === curMonth ? 'selected' : ''}>${m}</option>`
+            ).join('');
+        }
+        if (budgetYear) {
+            const years = [curYear - 1, curYear, curYear + 1];
+            budgetYear.innerHTML = years.map(y =>
+                `<option value="${y}" ${y === curYear ? 'selected' : ''}>${y}</option>`
+            ).join('');
+        }
     },
 
     // Refresh all page metrics, analytics, and table data
@@ -59,6 +107,64 @@ const App = {
 
     // Bind event listeners
     bindEvents() {
+        // Period filter dropdown in header
+        const periodFilter = document.getElementById('periodFilterSelect');
+        const customContainer = document.getElementById('customPeriodContainer');
+        const customMonth = document.getElementById('customMonthSelect');
+        const customYear = document.getElementById('customYearSelect');
+
+        if (periodFilter) {
+            periodFilter.addEventListener('change', (e) => {
+                const val = e.target.value;
+                const now = new Date();
+
+                if (val === 'this-month') {
+                    this.state.periodMode = 'month';
+                    this.state.selectedMonth = now.getMonth() + 1;
+                    this.state.selectedYear = now.getFullYear();
+                    if (customContainer) customContainer.classList.add('hidden');
+                } else if (val === 'last-month') {
+                    this.state.periodMode = 'month';
+                    let prevMonth = now.getMonth(); // 0-indexed is prev month (since getMonth() is 0-11)
+                    let prevYear = now.getFullYear();
+                    if (prevMonth === 0) {
+                        prevMonth = 12;
+                        prevYear -= 1;
+                    }
+                    this.state.selectedMonth = prevMonth;
+                    this.state.selectedYear = prevYear;
+                    if (customContainer) customContainer.classList.add('hidden');
+                } else if (val === 'all') {
+                    this.state.periodMode = 'all';
+                    if (customContainer) customContainer.classList.add('hidden');
+                } else if (val === 'custom') {
+                    this.state.periodMode = 'month';
+                    if (customContainer) customContainer.classList.remove('hidden');
+                    if (customMonth) this.state.selectedMonth = parseInt(customMonth.value);
+                    if (customYear) this.state.selectedYear = parseInt(customYear.value);
+                }
+
+                this.state.page = 1;
+                this.refreshAllData();
+            });
+        }
+
+        if (customMonth) {
+            customMonth.addEventListener('change', (e) => {
+                this.state.selectedMonth = parseInt(e.target.value);
+                this.state.page = 1;
+                this.refreshAllData();
+            });
+        }
+
+        if (customYear) {
+            customYear.addEventListener('change', (e) => {
+                this.state.selectedYear = parseInt(e.target.value);
+                this.state.page = 1;
+                this.refreshAllData();
+            });
+        }
+
         // Search input with debounce
         let searchTimeout;
         const searchInput = document.getElementById('searchInput');
@@ -172,21 +278,23 @@ const App = {
             });
         }
 
-        // Clear expenses button
+        // Start Fresh / Clear expenses buttons
+        const clearNavBtn = document.getElementById('clearAllNavBtn');
         const clearBtn = document.getElementById('clearAllBtn');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', async () => {
-                if (confirm('Are you sure you want to delete ALL expense records? This cannot be undone.')) {
-                    try {
-                        await API.clearExpenses();
-                        this.showToast('All expense records cleared', 'info');
-                        await this.refreshAllData();
-                    } catch (err) {
-                        this.showToast(err.message, 'error');
-                    }
+        const handleClearAction = async () => {
+            if (confirm('Clear all recorded expenses and start fresh with an empty database?')) {
+                try {
+                    await API.clearExpenses();
+                    this.showToast('All expenses cleared. You now have a fresh clean tracker!', 'info');
+                    await this.refreshAllData();
+                } catch (err) {
+                    this.showToast(err.message, 'error');
                 }
-            });
-        }
+            }
+        };
+
+        if (clearNavBtn) clearNavBtn.addEventListener('click', handleClearAction);
+        if (clearBtn) clearBtn.addEventListener('click', handleClearAction);
     },
 
     // Load static category and payment method definitions
@@ -231,10 +339,74 @@ const App = {
         }
     },
 
+    // -------------------------------------------------------------
+    // Interactive KPI Card Actions
+    // -------------------------------------------------------------
+    filterByAllTime() {
+        this.state.periodMode = 'all';
+        const periodFilter = document.getElementById('periodFilterSelect');
+        if (periodFilter) periodFilter.value = 'all';
+
+        const customContainer = document.getElementById('customPeriodContainer');
+        if (customContainer) customContainer.classList.add('hidden');
+
+        this.state.page = 1;
+        this.refreshAllData();
+        this.scrollToTable();
+        this.showToast('Showing all lifetime expenses', 'info');
+    },
+
+    filterBySelectedMonth() {
+        this.state.periodMode = 'month';
+        const periodFilter = document.getElementById('periodFilterSelect');
+        if (periodFilter) periodFilter.value = 'this-month';
+
+        this.state.page = 1;
+        this.refreshAllData();
+        this.scrollToTable();
+        this.showToast('Filtered table to current month', 'info');
+    },
+
+    filterByHighestExpense() {
+        this.state.sortBy = 'amount';
+        this.state.order = 'DESC';
+        const sortSelect = document.getElementById('sortSelect');
+        if (sortSelect) sortSelect.value = 'amount:DESC';
+
+        this.state.page = 1;
+        this.loadExpenses();
+        this.scrollToTable();
+        this.showToast('Sorted by highest transaction', 'info');
+    },
+
+    scrollToTable() {
+        const table = document.getElementById('expenseTableContainer');
+        if (table) {
+            table.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    },
+
     // Fetch and render KPI metric cards
     async loadKPIs() {
         try {
-            const kpis = await API.getSummaryKPIs();
+            const params = {};
+            if (this.state.periodMode === 'month') {
+                params.month = this.state.selectedMonth;
+                params.year = this.state.selectedYear;
+            }
+
+            const kpis = await API.getSummaryKPIs(params);
+            const period = kpis.period || {};
+
+            // Update card title to reflect active period
+            const monthTitleEl = document.getElementById('kpiMonthTitle');
+            const periodLabelEl = document.getElementById('kpiPeriodLabel');
+            if (monthTitleEl) {
+                monthTitleEl.textContent = this.state.periodMode === 'all' ? 'All Time' : (period.label || 'This Month');
+            }
+            if (periodLabelEl) {
+                periodLabelEl.textContent = this.state.periodMode === 'all' ? 'Lifetime' : 'Active';
+            }
 
             // Total spent
             document.getElementById('kpiTotalSpent').textContent = `$${kpis.total_spent.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
@@ -246,6 +418,7 @@ const App = {
 
             // Budget Info
             const b = kpis.budget;
+            this.state.currentBudgetLimit = b.limit;
             document.getElementById('kpiBudgetSpent').textContent = `$${b.spent.toFixed(2)}`;
             document.getElementById('kpiBudgetLimit').textContent = `$${b.limit.toFixed(2)}`;
             document.getElementById('kpiBudgetRemaining').textContent = `$${b.remaining.toFixed(2)} remaining`;
@@ -285,10 +458,16 @@ const App = {
     // Fetch and render analytics charts & category lists
     async loadAnalyticsCharts() {
         try {
+            const params = {};
+            if (this.state.periodMode === 'month') {
+                params.month = this.state.selectedMonth;
+                params.year = this.state.selectedYear;
+            }
+
             const [catData, trendsData, paymentData] = await Promise.all([
-                API.getCategoryAnalytics(),
-                API.getTrends(),
-                API.getPaymentAnalytics()
+                API.getCategoryAnalytics(params),
+                API.getTrends(params),
+                API.getPaymentAnalytics(params)
             ]);
 
             // Render Category Doughnut Chart
@@ -299,7 +478,7 @@ const App = {
             if (legendEl) {
                 const cats = catData.categories || [];
                 if (cats.length === 0) {
-                    legendEl.innerHTML = '<div class="text-sm text-slate-500 text-center py-4">No category data available</div>';
+                    legendEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No category data for this period</div>';
                 } else {
                     legendEl.innerHTML = cats.slice(0, 5).map(c => `
                         <div class="flex items-center justify-between py-1.5 border-b border-slate-800/60 last:border-0 text-xs">
@@ -323,7 +502,7 @@ const App = {
             const payEl = document.getElementById('paymentBreakdownList');
             if (payEl) {
                 if (paymentData.length === 0) {
-                    payEl.innerHTML = '<div class="text-sm text-slate-500 text-center py-4">No payment data available</div>';
+                    payEl.innerHTML = '<div class="text-xs text-slate-500 text-center py-4">No payment records for this period</div>';
                 } else {
                     payEl.innerHTML = paymentData.map(p => `
                         <div class="space-y-1">
@@ -355,6 +534,15 @@ const App = {
             limit: this.state.limit,
             offset: offset
         };
+
+        // If filtering by specific month
+        if (this.state.periodMode === 'month') {
+            const y = this.state.selectedYear;
+            const m = String(this.state.selectedMonth).padStart(2, '0');
+            const daysInMonth = new Date(y, this.state.selectedMonth, 0).getDate();
+            params.start_date = `${y}-${m}-01`;
+            params.end_date = `${y}-${m}-${daysInMonth}`;
+        }
 
         try {
             const data = await API.getExpenses(params);
@@ -542,6 +730,14 @@ const App = {
     },
 
     openBudgetModal() {
+        const monthSelect = document.getElementById('budgetMonthSelect');
+        const yearSelect = document.getElementById('budgetYearSelect');
+        const input = document.getElementById('budgetAmountInput');
+
+        if (monthSelect) monthSelect.value = this.state.selectedMonth;
+        if (yearSelect) yearSelect.value = this.state.selectedYear;
+        if (input) input.value = this.state.currentBudgetLimit || '';
+
         document.getElementById('budgetModal').classList.remove('hidden');
     },
 
@@ -552,9 +748,12 @@ const App = {
     async handleBudgetSubmit(e) {
         e.preventDefault();
         const amount = document.getElementById('budgetAmountInput').value;
+        const month = document.getElementById('budgetMonthSelect').value;
+        const year = document.getElementById('budgetYearSelect').value;
+
         try {
-            await API.updateBudget(amount);
-            this.showToast('Monthly budget updated!', 'success');
+            await API.updateBudget(amount, month, year);
+            this.showToast(`Budget of $${parseFloat(amount).toFixed(2)} saved for ${month}/${year}!`, 'success');
             this.closeBudgetModal();
             await this.loadKPIs();
         } catch (err) {
@@ -617,4 +816,3 @@ window.App = App;
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });
-

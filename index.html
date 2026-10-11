@@ -62,18 +62,47 @@
             </div>
 
             <!-- Header Action Controls -->
-            <div class="flex items-center gap-2.5">
+            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                <!-- Month / Period Filter Selector -->
+                <div class="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1">
+                    <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <select id="periodFilterSelect" class="bg-transparent text-xs text-slate-200 font-medium focus:outline-none cursor-pointer">
+                        <option value="this-month">This Month</option>
+                        <option value="last-month">Last Month</option>
+                        <option value="all">All Time</option>
+                        <option value="custom">Custom Month & Year...</option>
+                    </select>
+                    <!-- Custom Month/Year picker inputs (shown if 'custom' selected) -->
+                    <div id="customPeriodContainer" class="hidden flex items-center gap-1 border-l border-slate-700 pl-1.5">
+                        <select id="customMonthSelect" class="bg-slate-800 text-[11px] text-slate-200 rounded px-1.5 py-0.5 focus:outline-none"></select>
+                        <select id="customYearSelect" class="bg-slate-800 text-[11px] text-slate-200 rounded px-1.5 py-0.5 focus:outline-none"></select>
+                    </div>
+                </div>
+
+                <!-- Load Demo Data -->
                 <button id="seedDemoBtn"
-                        class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
-                        title="Reset & Load 28+ realistic sample expenses">
+                        class="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                        title="Load 28 sample expenses for demo">
                     <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     <span class="hidden md:inline">Demo Data</span>
                 </button>
 
+                <!-- Clear Data / Start Fresh (Empty) -->
+                <button id="clearAllNavBtn"
+                        class="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-rose-950/60 hover:text-rose-300 hover:border-rose-700/60 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                        title="Clear all expenses to start with empty database">
+                    <svg class="w-3.5 h-3.5 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span class="hidden md:inline">Start Fresh</span>
+                </button>
+
                 <a href="/api/expenses/export"
-                   class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
+                   class="px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition flex items-center gap-1.5"
                    title="Download all transactions as CSV">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -95,31 +124,43 @@
     <!-- Main Content Container -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full space-y-6">
 
-        <!-- 1. KPI Cards Row -->
+        <!-- 1. Interactive KPI Cards Row (Clickable) -->
         <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             
-            <!-- Card 1: Total Spend -->
-            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+            <!-- Card 1: Total Spend (Click to show all transactions) -->
+            <div id="kpiTotalCard"
+                 onclick="App.filterByAllTime()"
+                 class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5 cursor-pointer hover:border-indigo-500/50 group"
+                 title="Click to view all transactions">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Recorded</span>
-                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-indigo-300 transition">Total Recorded</span>
+                        <span class="text-[10px] text-indigo-400 opacity-0 group-hover:opacity-100 transition font-normal hidden sm:inline">View All →</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center group-hover:scale-110 transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                         </svg>
                     </div>
                 </div>
                 <div id="kpiTotalSpent" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
-                <div class="mt-2 text-xs text-slate-400 flex items-center gap-1.5">
+                <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
                     <span id="kpiTotalCount" class="font-medium text-slate-300">0 transactions</span>
-                    <span>lifetime</span>
+                    <span class="text-[11px] text-slate-500 font-mono">Lifetime</span>
                 </div>
             </div>
 
-            <!-- Card 2: This Month's Spend -->
-            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+            <!-- Card 2: Selected Month's Spend (Click to filter table to this month) -->
+            <div id="kpiMonthCard"
+                 onclick="App.filterBySelectedMonth()"
+                 class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5 cursor-pointer hover:border-emerald-500/50 group"
+                 title="Click to filter table to this month">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">This Month</span>
-                    <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                    <div class="flex items-center gap-1.5">
+                        <span id="kpiMonthTitle" class="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-emerald-300 transition">This Month</span>
+                        <span class="text-[10px] text-emerald-400 opacity-0 group-hover:opacity-100 transition font-normal hidden sm:inline">Filter →</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
@@ -128,20 +169,21 @@
                 <div id="kpiMonthlySpent" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
                 <div class="mt-2 text-xs text-slate-400 flex items-center justify-between">
                     <span id="kpiDailyAvg" class="text-slate-300">Avg ~$0.00/day</span>
-                    <span class="text-emerald-400">Current</span>
+                    <span id="kpiPeriodLabel" class="text-emerald-400 text-[11px] font-mono">Current</span>
                 </div>
             </div>
 
-            <!-- Card 3: Monthly Budget Progress -->
-            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+            <!-- Card 3: Monthly Budget Progress (Click anywhere to edit budget) -->
+            <div id="kpiBudgetCard"
+                 onclick="App.openBudgetModal()"
+                 class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5 cursor-pointer hover:border-purple-500/50 group"
+                 title="Click to set or adjust monthly budget">
                 <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-1.5">
-                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Monthly Budget</span>
-                        <button onclick="App.openBudgetModal()" class="text-slate-400 hover:text-indigo-400 transition" title="Edit Budget Limit">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                        </button>
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-purple-300 transition">Monthly Budget</span>
+                        <svg class="w-3.5 h-3.5 text-purple-400 group-hover:scale-110 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
                     </div>
                     <span id="kpiBudgetBadge" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         Healthy (0%)
@@ -158,11 +200,30 @@
                 <div id="kpiBudgetRemaining" class="mt-1 text-[11px] text-slate-400 text-right font-mono">$0.00 remaining</div>
             </div>
 
-            <!-- Card 4: Highest Expense -->
-            <div class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5">
+            <!-- Card 4: Highest Expense (Click to sort/highlight in table) -->
+            <div id="kpiHighestCard"
+                 onclick="App.filterByHighestExpense()"
+                 class="glass-card rounded-2xl p-5 relative overflow-hidden transition hover:-translate-y-0.5 cursor-pointer hover:border-pink-500/50 group"
+                 title="Click to view highest expense in table">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Highest Expense</span>
-                    <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider group-hover:text-pink-300 transition">Highest Expense</span>
+                        <span class="text-[10px] text-pink-400 opacity-0 group-hover:opacity-100 transition font-normal hidden sm:inline">Inspect →</span>
+                    </div>
+                    <div class="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center group-hover:scale-110 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                    </div>
+                </div>
+                <div id="kpiHighestAmount" class="text-2xl font-extrabold text-white font-mono">$0.00</div>
+                <div class="mt-2 text-xs truncate">
+                    <div id="kpiHighestTitle" class="font-medium text-slate-200 truncate">None yet</div>
+                    <div id="kpiHighestDate" class="text-slate-500 text-[11px] truncate">No records</div>
+                </div>
+            </div>
+
+        </section>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                         </svg>
@@ -440,11 +501,22 @@
             </div>
 
             <form id="budgetForm" class="space-y-4 text-xs">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Target Month</label>
+                        <select id="budgetMonthSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"></select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-300 mb-1">Target Year</label>
+                        <select id="budgetYearSelect" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"></select>
+                    </div>
+                </div>
+
                 <div>
-                    <label class="block font-medium text-slate-300 mb-1">Budget Limit for This Month ($)</label>
-                    <input id="budgetAmountInput" type="number" step="10" min="1" required placeholder="1500.00"
+                    <label class="block font-medium text-slate-300 mb-1">Budget Limit ($) <span class="text-rose-400">*</span></label>
+                    <input id="budgetAmountInput" type="number" step="any" min="0" required placeholder="e.g. 2121.00"
                            class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-slate-100 placeholder-slate-500 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 text-sm">
-                    <p class="mt-1 text-[11px] text-slate-500">SpendWise will calculate your remaining balance and show health alerts based on this threshold.</p>
+                    <p class="mt-1 text-[11px] text-slate-500">SpendWise will calculate remaining balance and health status based on this threshold.</p>
                 </div>
 
                 <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
