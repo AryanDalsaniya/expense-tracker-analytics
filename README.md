@@ -19,19 +19,21 @@
 - **Payment Method Share:** Visual breakdown of transactions paid via UPI, Credit Card, Debit Card, Net Banking, and Cash.
 
 ### 2. 🎯 Budget Health & Alerts
-- Set custom monthly spending limits.
+- Set custom monthly spending limits for any month and year (accepts any custom amount).
 - Real-time progress bar reflecting consumed vs. remaining budget.
 - Automatic status pills: **Healthy (<75%)**, **Near Limit (75-100%)**, and **Exceeded (>100%)**.
 
 ### 3. 📝 Complete Expense Management (CRUD)
 - Record transactions with Title, Amount, Category, Date, Payment Mode, and Notes.
+- Date picker supports any past date up to today with quick presets (Today, Yesterday, 3 Days Ago).
 - In-place Edit and Delete with confirmation modals.
 - Real-time search by title or description.
 - Multi-field filters: filter by category, payment method, and sort by date or amount.
 - Pagination for clean browsing through large datasets.
 
-### 4. 🚀 Demo & Data Portability
-- **One-Click Demo Data:** Load 28+ realistic sample transactions spanning 40 days to immediately showcase rich charts.
+### 4. 🛡️ Isolated Demo Sandbox vs. Live Tracker
+- **100% Clean Slate:** "My Tracker" starts empty with zero records, strictly storing user-added transactions.
+- **Isolated Demo Sandbox:** Reviewers can explore 28 sample expenses in a separate preview mode without corrupting live user data.
 - **Export to CSV:** Download all transaction history directly to an Excel/spreadsheet-compatible CSV file.
 
 ---
@@ -116,12 +118,19 @@ pip install -r requirements.txt
 
 ### 4. Run the Application
 ```bash
+python run.py
+# Or directly:
 python app.py
 ```
 
 Open your browser and navigate to:
 ```
 http://127.0.0.1:5000
+```
+
+### 5. Run Automated Tests
+```bash
+python -m unittest discover -s tests
 ```
 
 ---
